@@ -1,0 +1,139 @@
+[
+  {
+    "id": "mfg_001",
+    "name": "润新微电子有限公司"
+  },
+  {
+    "id": "mfg_002",
+    "name": "Texas Instruments",
+    "aliases": [
+      "德州仪器公司",
+      "TI"
+    ]
+  },
+  {
+    "id": "mfg_003",
+    "name": "Isolink, Inc."
+  },
+  {
+    "id": "mfg_004",
+    "name": "Broadcom Inc.",
+    "country": "美国"
+  },
+  {
+    "id": "mfg_005",
+    "name": "Analog Devices, Inc.",
+    "aliases": [
+      "ADI",
+      "Analog Devices"
+    ]
+  },
+  {
+    "id": "mfg_006",
+    "name": "STMicroelectronics N.V.",
+    "aliases": [
+      "ST"
+    ]
+  },
+  {
+    "id": "mfg_auto_3bb2ca88",
+    "name": "RealChip正芯",
+    "source": "auto-added from device data processing"
+  },
+  {
+    "id": "mfg_auto_ec5667eb",
+    "name": "Celeritek",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_ba4a01a7",
+    "name": "ON Semiconductor",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_f46843ff",
+    "name": "Infineon",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_2aa6241b",
+    "name": "Maxim Integrated",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_af3a01a9",
+    "name": "Advanced Analogic Technologies, Inc.",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_350a8480",
+    "name": "International Rectifier",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_cb7a22c2",
+    "name": "Philips Semiconductors",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_6c0798b9",
+    "name": "Skyworks Solutions, Inc.",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_58187776",
+    "name": "RAMTRON",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_9ab17bd7",
+    "name": "Linear Technology",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_a31580a1",
+    "name": "NXP Semiconductors",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_f797e25e",
+    "name": "Monolithic Power Systems, Inc.",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_0fc13607",
+    "name": "Diodes Incorporated",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_cf95d7be",
+    "name": "Zetex Semiconductors",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_eccea35b",
+    "name": "Runxin Micro",
+    "source": "auto-added",
+    "aliases": []
+  },
+  {
+    "id": "mfg_auto_433f4f51",
+    "name": "Koninklijke Philips Electronics N.V.",
+    "source": "auto-added",
+    "aliases": []
+  }
+]

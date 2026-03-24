@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local databases
+*.sqlite3
+db.sqlite3
+
+# Django / runtime-generated files
+staticfiles/
+media/
+storage/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/coverage/
+frontend/tsconfig.tsbuildinfo
+frontend/.turbo/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
