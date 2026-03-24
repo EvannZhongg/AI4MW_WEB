@@ -34,7 +34,6 @@
   --feature-grid-line: rgba(128, 150, 186, 0.15);
   --feature-table-head: rgba(255, 255, 255, 0.03);
   --feature-preview-height: clamp(240px, 34vh, 320px);
-  --chat-dock-bg: rgba(12, 20, 40, 0.985);
   --chat-shell-bg: linear-gradient(180deg, rgba(18, 27, 49, 0.985), rgba(14, 21, 40, 0.985));
   --chat-empty-bg: linear-gradient(160deg, rgba(95, 141, 255, 0.12), rgba(18, 27, 49, 0.18));
   --chat-user-bg: linear-gradient(180deg, rgba(95, 141, 255, 0.24), rgba(95, 141, 255, 0.1));
@@ -52,6 +51,7 @@
   --chat-attachment-bg: rgba(255, 255, 255, 0.05);
   --chat-link: #9ac8ff;
   --chat-send-ink: #f6f9ff;
+  --chat-dock-shadow: 0 18px 42px rgba(7, 11, 22, 0.32);
 }
 
 * {
@@ -102,7 +102,6 @@ body[data-theme="light"] {
   --feature-grid-line: rgba(90, 110, 150, 0.14);
   --feature-table-head: rgba(46, 107, 255, 0.05);
   --feature-preview-height: clamp(240px, 34vh, 320px);
-  --chat-dock-bg: rgba(228, 235, 247, 0.985);
   --chat-shell-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(246, 249, 255, 0.99));
   --chat-empty-bg: linear-gradient(160deg, rgba(46, 107, 255, 0.1), rgba(255, 255, 255, 0.86));
   --chat-user-bg: linear-gradient(180deg, rgba(46, 107, 255, 0.16), rgba(46, 107, 255, 0.08));
@@ -120,6 +119,7 @@ body[data-theme="light"] {
   --chat-attachment-bg: rgba(241, 245, 255, 0.9);
   --chat-link: #1f56db;
   --chat-send-ink: #ffffff;
+  --chat-dock-shadow: 0 18px 36px rgba(130, 151, 190, 0.16);
 }
 
 .app-shell {
@@ -1037,8 +1037,8 @@ body[data-theme="light"] .chat-think-line::before {
   position: sticky;
   bottom: 0;
   z-index: 8;
-  padding: 0;
-  background: var(--chat-dock-bg);
+  padding: 18px 0 0;
+  background: transparent;
 }
 
 .chat-input {
@@ -1048,7 +1048,8 @@ body[data-theme="light"] .chat-think-line::before {
   border-radius: var(--radius-lg);
   border: 1px solid var(--stroke);
   background: var(--surface-1);
-  box-shadow: none;
+  box-shadow: var(--chat-dock-shadow);
+  backdrop-filter: blur(18px);
   position: relative;
 }
 
@@ -1136,6 +1137,10 @@ body[data-theme="light"] .chat-think-line::before {
   .chat-attachment {
     width: min(220px, calc(50% - 5px));
     height: 110px;
+  }
+
+  .chat-input-dock {
+    padding-top: 12px;
   }
 
   .chat-input {
