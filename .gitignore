@@ -9,6 +9,7 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.npm-cache/
 .coverage
 htmlcov/
 
@@ -40,3 +41,6 @@ frontend/.turbo/
 .vscode/
 .DS_Store
 Thumbs.db
+
+
+nanobot-main/

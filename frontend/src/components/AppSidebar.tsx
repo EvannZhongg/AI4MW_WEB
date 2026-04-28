@@ -16,7 +16,7 @@ const coreModules = [
 ];
 
 const atomicTools = [
-  { name: "电路识别", desc: "从图像识别电路结构", status: "即将开放" },
+  { name: "论文检索", desc: "检索并筛选学术论文", href: "/paper-search", status: "已接通" },
   { name: "曲线提取", desc: "从图表提取多维曲线", href: "/curve-extraction", status: "已接通" },
   { name: "参数反推", desc: "拟合模型与关键参数", status: "规划中" }
 ];

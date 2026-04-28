@@ -1,0 +1,612 @@
+# 非敏感配置文件。
+# API Key、邮箱、Cookie 等敏感信息不写在这里，而是通过 `.env` 注入。
+
+project:
+  # 项目名称，仅用于标识当前服务。
+  name: paper-search-agent
+  # 默认检索模式，可选 quick / deep。
+  default_mode: quick
+  # 默认语言偏好，用于检索规划或默认过滤。
+  default_language: en
+
+http:
+  # 单次 HTTP 请求的总超时时间，单位秒。
+  request_timeout_seconds: 30
+  # 建立连接阶段的超时时间，单位秒。
+  connect_timeout_seconds: 10
+  # 请求失败后的最大重试次数。
+  max_retries: 2
+  # 对外请求时使用的 User-Agent。
+  user_agent: paper-search-agent/0.1
+
+redis:
+  # 是否启用 Redis 作为共享缓存/限流后端。
+  enabled: true
+  # Redis 主机地址。
+  host: 127.0.0.1
+  # Redis 端口。
+  port: 6379
+  # Redis DB 编号。
+  db: 0
+  # Redis 用户名，未启用 ACL 时可为空。
+  username_env: REDIS_USERNAME
+  # Redis 密码，未设置密码时可为空。
+  password_env: REDIS_PASSWORD
+  # 本服务在 Redis 中使用的统一 key 前缀。
+  key_prefix: paper_search_agent
+  # Redis 连接超时，单位秒。
+  connect_timeout_seconds: 5
+  # Redis socket 读写超时，单位秒。
+  socket_timeout_seconds: 5
+  # Redis 健康检查间隔，单位秒。
+  health_check_interval_seconds: 30
+
+retrieval:
+  # 默认召回的候选论文数量。
+  default_top_k_recall: 200
+  # 默认最终返回给上层的结果数量。
+  default_top_k_return: 50
+  # 是否启用多源结果去重。
+  enable_dedup: true
+  # 去重时优先使用的标识字段顺序。
+  dedup_primary_keys:
+    # DOI 去重。
+    - doi
+    # arXiv ID 去重。
+    - arxiv_id
+    # 平台自身的论文 ID 去重。
+    - paper_id
+    # 标题 + 年份 + 作者近似去重。
+    - title_year_author
+  quick:
+    # Quick Search 最多使用多少个 query variant。
+    max_query_variants: 1
+    # 是否优先尝试 embedding 语义相似度。
+    enable_embedding_similarity: true
+    # hybrid rerank 的 recency 窗口年数。
+    recency_window_years: 10
+    # 当 source 未显式配置 prior 时的默认值。
+    default_source_prior: 0.6
+    # Quick hybrid rerank 权重。
+    hybrid_weights:
+      lexical: 0.45
+      semantic: 0.35
+      source_prior: 0.1
+      recency: 0.05
+      open_access: 0.05
+    # source prior 用于表达不同源在 Quick 模式下的默认可信度/相关性偏好。
+    source_priors:
+      openalex: 0.9
+      semanticscholar: 0.9
+      core: 0.75
+      crossref: 0.8
+      ieee: 0.85
+      arxiv: 0.7
+  deep:
+    # Deep-CQ Search 基础 query bundle 的最小数量。
+    max_query_variants: 4
+    # 复杂组合查询可在基础上额外增加多少个 query variant。
+    max_query_variants_complexity_bonus: 4
+    # Deep 模式下每个 source、每个 query variant 默认抓取多少候选。
+    limit_per_source_default: 30
+    # 是否在 Deep 检索中补充 must_terms 查询变体。
+    include_must_terms_query: true
+    # 每个 source 最多送多少篇候选给 LLM judge。
+    llm_top_n_per_source: 10
+    # 每多一个 required criterion，额外增加多少篇送审预算。
+    llm_top_n_per_source_complex_bonus: 2
+    # 动态放大后每个 source 的送审上限。
+    max_dynamic_llm_top_n_per_source: 14
+    # 只有启发式分数不低于该阈值的候选才会优先送 LLM。
+    llm_prefilter_min_score: 0.15
+    # round-robin 送审时优先考虑的最低 coverage；为空时按 required criteria 数动态推导。
+    judge_round_robin_min_coverage:
+    # 同一 (source, query_variant) 车道连续出现低产出结果多少次后提前停送审。
+    judge_lane_negative_streak_limit: 2
+    # maybe 结果要达到多高分，才算该车道仍有产出价值。
+    judge_lane_positive_maybe_score: 0.72
+    # Deep 结果中启发式与 LLM 相关性分数的混合权重。
+    heuristic_weight: 0.3
+    llm_weight: 0.7
+    # criterion-level 词法支持阈值。
+    criterion_supported_threshold: 0.45
+    # 对“text + graph + hybrid”这类组合条件使用更严格的支持阈值。
+    criterion_combination_supported_threshold: 0.65
+    criterion_optional_supported_threshold: 0.3
+    # Deep-CQ 预评分权重，优先体现 required criteria coverage。
+    coverage_weight: 0.55
+    criterion_score_weight: 0.25
+    overall_query_score_weight: 0.2
+    # Deep 结果的默认决策阈值。
+    keep_threshold: 0.6
+    maybe_threshold: 0.35
+    # 最终 hard prune 时保留的 maybe 的最低 deep score。
+    final_high_score_maybe_threshold: 0.55
+    # 最终 hard prune 时保留的 maybe 的最低 coverage；为空时按 logic/criteria 数动态推导。
+    final_high_score_maybe_min_coverage:
+
+# llm:
+#   # 大模型服务提供方，例如 openai / azure_openai / openrouter / 自建兼容服务。
+#   provider: openai
+#   # 默认使用的大模型名称。
+#   model: gpt-5.2
+#   # LLM API 根地址，支持 OpenAI 兼容网关。
+#   api_base: https://gmncode.cn/v1
+#   # 从 `.env` 读取 LLM API Key 的环境变量名。
+#   api_key_env: LLM_API_KEY
+#   # 接口选择策略。
+#   # 可选：
+#   # - auto: 运行时根据 preference 自动选择 responses 或 chat_completions
+#   # - responses: 强制走 Responses API
+#   # - chat_completions: 强制走 Chat Completions API
+#   api_interface: auto
+#   # 当 `api_interface=auto` 时的优先接口。
+#   # 可选：responses / chat_completions
+#   api_interface_preference: responses
+#   # 默认温度。
+#   temperature: 0.2
+#   # 默认最大输出 token 数，0 表示由调用侧自行决定。
+#   max_output_tokens: 0
+#   # 请求超时时间，单位秒。
+#   request_timeout_seconds: 60
+#   # 是否在服务启动时打印当前接口选择策略。
+#   log_interface_selection: true
+llm:
+  # 大模型服务提供方，例如 openai / azure_openai / openrouter / 自建兼容服务。
+  provider: openai
+  # 默认使用的大模型名称。
+  model: Qwen/Qwen2.5-14B-Instruct
+  # LLM API 根地址，支持 OpenAI 兼容网关。
+  api_base: https://api.siliconflow.cn/v1
+  # 从 `.env` 读取 LLM API Key 的环境变量名。
+  api_key_env: LLM_API_KEY
+  # 接口选择策略。
+  # 可选：
+  # - auto: 运行时根据 preference 自动选择 responses 或 chat_completions
+  # - responses: 强制走 Responses API
+  # - chat_completions: 强制走 Chat Completions API
+  api_interface: auto
+  # 当 `api_interface=auto` 时的优先接口。
+  # 可选：responses / chat_completions
+  api_interface_preference: chat_completions
+  # 默认温度。
+  temperature: 0.2
+  # 默认最大输出 token 数，0 表示由调用侧自行决定。
+  max_output_tokens: 0
+  # 请求超时时间，单位秒。
+  request_timeout_seconds: 60
+  # 是否在服务启动时打印当前接口选择策略。
+  log_interface_selection: true
+embedding:
+  # 向量服务提供方，例如 openai / azure_openai / 自建兼容服务。
+  provider: openai
+  # 默认使用的嵌入模型名称。
+  model: text-embedding-v4
+  # Embedding API 根地址，支持 OpenAI 兼容网关。
+  api_base: https://dashscope.aliyuncs.com/compatible-mode/v1
+  # 从 `.env` 读取 Embedding API Key 的环境变量名。
+  api_key_env: EMBED_API_KEY
+  # 向量维度。
+  dim: 1024
+  # 单次批量嵌入的文本条数。
+  batch_size: 10
+  # 请求超时时间，单位秒。
+  request_timeout_seconds: 60
+
+sources:
+  openalex:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: true
+    # 是否默认对用户开放该检索源。
+    public_enabled: true
+    # 是否允许该源参与 Quick Search。
+    supports_quick: true
+    # 是否允许该源参与 Deep Search。
+    supports_deep: true
+    # OpenAlex API 根地址。
+    base_url: https://api.openalex.org
+    # 从 `.env` 读取 OpenAlex API Key 的环境变量名。
+    api_key_env: OPENALEX_API_KEY
+    # works 检索接口路径。
+    works_path: /works
+    # works 自动补全接口路径。
+    autocomplete_path: /autocomplete/works
+    # 默认每页条数。
+    default_per_page: 25
+    # 每页最大条数。
+    max_per_page: 100
+    # 是否支持 cursor 深分页。
+    supports_cursor: true
+    # 是否支持 `search.semantic` 语义检索。
+    supports_semantic_search: true
+    # 语义检索建议速率限制，单位 RPS。
+    semantic_rate_limit_rps: 1.0
+    # 语义检索单次最大结果数。
+    semantic_max_results: 50
+    # 是否支持 OpenAlex 的内容下载能力。
+    supports_content_download: true
+    # 是否支持 PDF/全文可用性信号。
+    supports_pdf_availability_signal: true
+    # 是否支持参考文献列表拉取。
+    supports_reference_fetch: false
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 30
+    runtime:
+      # OpenAlex 允许并发 query variant，不强制串行。
+      batch_mode: concurrent
+      # 使用 Redis 缓存热门 query，降低重复请求。
+      cache_backend: redis
+      cache_ttl_seconds: 300
+      # 当前默认不额外施加共享限流。
+      rate_limit_backend: none
+
+  semanticscholar:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: true
+    # 是否默认对用户开放该检索源。
+    public_enabled: true
+    # 是否允许该源参与 Quick Search。
+    supports_quick: true
+    # 是否允许该源参与 Deep Search。
+    supports_deep: true
+    # Graph API 根地址。
+    graph_base_url: https://api.semanticscholar.org/graph/v1
+    # Recommendations API 根地址。
+    recommendations_base_url: https://api.semanticscholar.org/recommendations/v1
+    # Datasets API 根地址。
+    datasets_base_url: https://api.semanticscholar.org/datasets/v1
+    # 从 `.env` 读取 Semantic Scholar API Key 的环境变量名。
+    api_key_env: SEMANTIC_SCHOLAR_API_KEY
+    # 普通论文搜索接口路径。
+    paper_search_path: /paper/search
+    # Bulk 检索接口路径，适合深分页和批量拉取。
+    paper_bulk_search_path: /paper/search/bulk
+    # 批量回表详情接口路径。
+    paper_batch_path: /paper/batch
+    # snippet 搜索接口路径。
+    snippet_search_path: /snippet/search
+    # 默认单次检索条数。
+    default_limit: 25
+    # 单次检索最大条数。
+    max_limit: 100
+    # bulk 检索每批建议条数。
+    bulk_page_size: 1000
+    # 是否优先筛选带开放 PDF 的论文。
+    prefer_open_access_pdf: true
+    # 是否支持 snippet 检索。
+    supports_snippet_search: true
+    # 是否支持相关推荐接口。
+    supports_recommendations: true
+    # 是否支持参考文献和引用关系拉取。
+    supports_reference_fetch: true
+    # 是否支持返回公开 PDF 链接。
+    supports_pdf_link: true
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 30
+    # 初期接入建议的速率限制，单位 RPS。
+    recommended_initial_rate_limit_rps: 1.0
+    runtime:
+      # 保持 query variant 并发，但请求控制交给 runtime。
+      batch_mode: concurrent
+      cache_backend: redis
+      cache_ttl_seconds: 300
+      # 初期按 1 RPS 保守接入。
+      rate_limit_backend: redis
+      min_interval_seconds: 1.0
+      serialize_requests: true
+      lock_timeout_seconds: 30
+      blocking_timeout_seconds: 60
+      enable_local_fallback: true
+
+  core:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: true
+    # 是否默认对用户开放该检索源。
+    public_enabled: true
+    # 是否允许该源参与 Quick Search。
+    supports_quick: true
+    # 是否允许该源参与 Deep Search。
+    supports_deep: true
+    # CORE API v3 根地址。
+    base_url: https://api.core.ac.uk/v3
+    # 从 `.env` 读取 CORE API Key 的环境变量名。
+    api_key_env: CORE_API_KEY
+    # works 检索接口路径。
+    works_search_path: /search/works
+    # outputs 检索接口路径。
+    outputs_search_path: /search/outputs
+    # DOI / 标题到全文链接发现接口路径。
+    discover_path: /discover
+    # work 级下载接口模板。
+    works_download_path: /works/{identifier}/download
+    # output 级下载接口模板。
+    outputs_download_path: /outputs/{identifier}/download
+    # 默认单次检索条数。
+    default_limit: 25
+    # 是否支持全文字段搜索。
+    supports_fulltext_search: true
+    # 是否支持返回原始 downloadUrl。
+    supports_download_url: true
+    # 是否支持官方下载 API。
+    supports_download_api: true
+    # 是否支持参考文献列表拉取。
+    supports_reference_fetch: true
+    # 是否只有认证用户才能拿全文。
+    fulltext_requires_authenticated_user: true
+    # 匿名用户每日 token 配额。
+    unauthenticated_tokens_per_day: 100
+    # 匿名用户每分钟请求上限。
+    unauthenticated_requests_per_minute: 10
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 30
+    runtime:
+      batch_mode: concurrent
+      cache_backend: redis
+      cache_ttl_seconds: 300
+      rate_limit_backend: none
+
+  crossref:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: true
+    # 是否默认对用户开放该检索源。
+    public_enabled: true
+    # 是否允许该源参与 Quick Search。
+    supports_quick: true
+    # 是否允许该源参与 Deep Search。
+    supports_deep: true
+    # Crossref REST API 根地址。
+    base_url: https://api.crossref.org
+    # 主检索 endpoint，显式使用版本化路径。
+    works_path: /v1/works
+    # polite pool 联系邮箱，从 `.env` 注入。
+    mailto_env: CROSSREF_MAILTO
+    # Metadata Plus token，可选。
+    plus_api_token_env: CROSSREF_PLUS_API_TOKEN
+    # 当前默认要求带 mailto，避免退回匿名公共池。
+    require_mailto: true
+    # 第一版优先使用 bibliographic query 做宽覆盖元数据召回。
+    query_parameter: query.bibliographic
+    # 默认按相关性倒序返回。
+    default_sort: relevance
+    default_order: desc
+    # Crossref 单次 rows 最大为 1000；这里保持保守。
+    max_rows: 100
+    # 为了在本地按类型过滤后仍保留足够候选，适度做过采样。
+    oversample_factor: 3
+    # 第一版只保留更接近论文主结果的 work type。
+    allowed_types:
+      - journal-article
+      - proceedings-article
+      - posted-content
+    # 是否支持 DOI 精确回表与结构化元数据增强。
+    supports_doi_lookup: true
+    supports_relation_signal: true
+    supports_funder_metadata: true
+    supports_license_signal: true
+    supports_fulltext_link_signal: true
+    supports_reference_fetch: true
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 30
+    runtime:
+      # query bundle 可以并发下发，但实际请求由 runtime 做保守串行控制。
+      batch_mode: concurrent
+      cache_backend: redis
+      cache_ttl_seconds: 300
+      # 第一版按 polite pool 的保守节奏接入。
+      rate_limit_backend: redis
+      min_interval_seconds: 0.35
+      serialize_requests: true
+      lock_timeout_seconds: 45
+      blocking_timeout_seconds: 90
+      retry_backoff_seconds: 2.0
+      enable_local_fallback: true
+
+  unpaywall:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: true
+    # 是否默认对用户开放该检索源。
+    # Unpaywall 更适合作为 enrich / resolver，因此默认不作为主检索源开放。
+    public_enabled: false
+    # 是否允许该源参与 Quick Search。
+    supports_quick: false
+    # 是否允许该源参与 Deep Search。
+    supports_deep: false
+    # Unpaywall API 根地址。
+    base_url: https://api.unpaywall.org/v2
+    # 从 `.env` 读取联系邮箱的环境变量名。
+    email_env: UNPAYWALL_EMAIL
+    # DOI 查询接口模板。
+    doi_lookup_path: /{doi}
+    # 标题检索接口路径。
+    search_path: /search
+    # 默认每页结果数。
+    default_page_size: 50
+    # 是否要求每次请求都带 email。
+    require_email: true
+    # 是否支持 OA 状态和全文入口解析。
+    supports_oa_resolution: true
+    # 是否支持返回 PDF 链接。
+    supports_pdf_link: true
+    # 是否支持参考文献列表拉取。
+    supports_reference_fetch: false
+    # 官方公开建议的每日调用上限。
+    max_calls_per_day: 100000
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 20
+    runtime:
+      batch_mode: concurrent
+      cache_backend: redis
+      cache_ttl_seconds: 600
+      rate_limit_backend: none
+
+  arxiv:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: true
+    # 是否默认对用户开放该检索源。
+    public_enabled: true
+    # 是否允许该源参与 Quick Search。
+    supports_quick: true
+    # 是否允许该源参与 Deep Search。
+    supports_deep: true
+    # arXiv 查询 API 根地址。
+    base_url: http://export.arxiv.org/api/query
+    # 是否需要 API Key。
+    requires_api_key: false
+    # 默认单次检索条数。
+    default_page_size: 25
+    # 单次检索最大条数。
+    max_page_size: 2000
+    # 单个查询窗口最大结果数。
+    max_total_results: 30000
+    # 官方建议的请求间隔，单位秒。
+    request_interval_seconds: 3.0
+    # 同时允许的最大并发请求数。
+    max_concurrent_requests: 1
+    # 是否支持 PDF 链接。
+    supports_pdf_link: true
+    # 是否支持参考文献列表拉取。
+    supports_reference_fetch: false
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 30
+    runtime:
+      # arXiv 的多 query variant 批处理策略。
+      batch_mode: sequential
+      # 缓存后端。当前建议使用 redis。
+      cache_backend: redis
+      # 搜索结果缓存 TTL，单位秒。
+      cache_ttl_seconds: 900
+      # 限流/单连接控制后端。当前建议使用 redis。
+      rate_limit_backend: redis
+      # 最小请求间隔，单位秒。
+      min_interval_seconds: 3.0
+      # 强制串行发请求，满足单连接要求。
+      serialize_requests: true
+      # 分布式锁超时，单位秒；应大于请求超时。
+      lock_timeout_seconds: 45
+      # 获取分布式锁的最长等待时间，单位秒。
+      blocking_timeout_seconds: 90
+      # 命中 429 后的额外退避时间，单位秒。
+      retry_backoff_seconds: 6.0
+      # 当 Redis 不可用时，是否退化到单进程本地限流。
+      enable_local_fallback: true
+
+  ieee:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: true
+    # 是否默认对用户开放该检索源。
+    public_enabled: true
+    # 是否允许该源参与 Quick Search。
+    supports_quick: true
+    # 是否允许该源参与 Deep Search。
+    supports_deep: true
+    # IEEE Xplore API 根地址。
+    base_url: https://ieeexploreapi.ieee.org/api/v1
+    # 从 `.env` 读取 IEEE API Key 的环境变量名。
+    api_key_env: IEEE_XPLORE_API_KEY
+    # 元数据检索接口路径。
+    metadata_search_path: /search/articles
+    # DOI 查询接口模板。
+    doi_lookup_path: /articles/doi/{doi_values}
+    # 全文获取接口模板。
+    fulltext_path: /search/document/{article_number}/fulltext
+    # 默认单次检索条数。
+    default_page_size: 25
+    # 是否强制要求 API Key。
+    requires_api_key: true
+    # 是否必须先拿到 article_number 才能拉全文。
+    requires_article_number_for_fulltext: true
+    # 是否支持 PDF 链接。
+    supports_pdf_link: true
+    # 是否支持参考文献列表拉取。
+    supports_reference_fetch: false
+    # 是否需要严格遵守使用条款。
+    respect_usage_policy: true
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 30
+    runtime:
+      batch_mode: concurrent
+      cache_backend: redis
+      cache_ttl_seconds: 600
+      rate_limit_backend: none
+
+  wanfang:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: false
+    # 是否默认对用户开放该检索源。
+    public_enabled: false
+    # 是否允许该源参与 Quick Search。
+    supports_quick: true
+    # 是否允许该源参与 Deep Search。
+    supports_deep: true
+    # 万方授权后的实际网关根地址，占位符需要替换成真实值。
+    api_base_url: REPLACE_WITH_AUTHORIZED_WANFANG_GATEWAY_BASE_URL
+    # 万方开放平台门户地址。
+    portal_base_url: https://open.wf.pub
+    # 从 `.env` 读取 AppKey 的环境变量名。
+    app_key_env: WANFANG_APP_KEY
+    # 从 `.env` 读取 AppSecret 的环境变量名。
+    app_secret_env: WANFANG_APP_SECRET
+    # 从 `.env` 读取 AppCode 的环境变量名。
+    app_code_env: WANFANG_APP_CODE
+    # 鉴权模式，当前预留为 appcode 或签名模式。
+    auth_mode: appcode_or_signature
+    # 检索接口路径。
+    query_path: /query
+    # 单条详情接口路径。
+    get_path: /get
+    # 聚类统计接口路径。
+    facet_path: /facet
+    # 自然语言转检索式接口路径。
+    text2solr_path: /text2Solr
+    # 全文接口路径。
+    fulltext_path: /fulltext
+    # 默认返回条数。
+    default_rows: 20
+    # 单次最大返回条数。
+    max_rows: 100
+    # 普通翻页的最大 start 值。
+    max_start: 5000
+    # 是否支持 cursor_mark 深翻页。
+    supports_cursor_mark: true
+    # 是否支持全文下载。
+    supports_fulltext_download: true
+    # 全文返回体编码方式。
+    fulltext_payload_encoding: base64
+    # 是否支持参考文献列表拉取。
+    supports_reference_fetch: false
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 45
+    # 是否建议使用低并发接入。
+    recommended_low_concurrency_mode: true
+
+  cnki:
+    # 系统是否已经实现并允许加载该检索源。
+    enabled: false
+    # 是否默认对用户开放该检索源。
+    public_enabled: false
+    # 是否允许该源参与 Quick Search。
+    supports_quick: true
+    # 是否允许该源参与 Deep Search。
+    supports_deep: true
+    # CNKI 门户地址。
+    portal_base_url: https://oversea.cnki.net
+    # 正式授权后的 API 根地址，占位符需要替换成真实值。
+    api_base_url: REPLACE_WITH_AUTHORIZED_CNKI_API_BASE_URL
+    # 从 `.env` 读取 AppId 的环境变量名。
+    app_id_env: CNKI_APP_ID
+    # 从 `.env` 读取 AppSecret 的环境变量名。
+    app_secret_env: CNKI_APP_SECRET
+    # 从 `.env` 读取会话 Cookie 的环境变量名。
+    session_cookie_env: CNKI_SESSION_COOKIE
+    # 是否要求正式授权合同后才能启用。
+    requires_authorized_contract: true
+    # 是否支持 PDF 链接。
+    supports_pdf_link: true
+    # 是否支持参考文献列表拉取。
+    supports_reference_fetch: true
+    # 全文是否可公开程序化访问。
+    fulltext_access_public: false
+    # 自动化下载风险等级。
+    download_automation_risk: high
+    # 当前源的请求超时时间，单位秒。
+    request_timeout_seconds: 30
