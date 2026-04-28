@@ -1,11 +1,11 @@
 # AI4MW Web 架构分析（代码核验版）
 
-> 本文基于当前仓库代码（`2026-03-25`）整理，重点区分“已接入主链路”和“仓库内存在但未接入主链路”的模块。
+> 本文基于当前仓库代码（`2026-04-28`）整理，重点区分“已接入主链路”和“仓库内存在但未接入主链路”的模块。
 
 ## 1. 当前项目结论（先看这个）
 
 - 主运行链路是 `Next.js 前端 -> Django API -> PostgreSQL + 文件存储 + 外部服务`。
-- 聊天能力由 `llm_agent` 承担，Agent 支持工具调用（当前只注册了 `line_build` skill）。
+- 聊天能力由 `llm_agent` 承担，Agent 支持统一工具调用：内置只读工作区工具（`grep` / `glob` / `list_dir` / `read_file`）、subagent 分发工具（`spawn_subagent`）与 `line_build` skill 通过同一 registry 执行。
 - 曲线提取有两条入口：
   - 前端工作台页面 `/curve-extraction` 走 Django `line_build` 代理接口。
   - 聊天 Agent 在需要时直接调用 `line_build` 独立服务。
@@ -79,13 +79,16 @@ flowchart TD
     B["chat_stream\nauth + payload parse"]
     C["Conversation/Message\ncreate or load"]
     D["attachment_service\nsave_uploaded_attachments"]
-    E["chat_service.build_chat_messages\n(system prompt + skill guidance + history + images)"]
+    E["AgentContextBuilder + chat_service\nagent/*.md prompt + runtime context + history + images"]
     F["AgentRuntime.run"]
-    G["skills.registry.get_tool_definitions"]
+    G["tools.registry\nbuiltins + subagent + skill adapters"]
     H["LLMClient.create_raw\ninterface=auto, tool_choice=auto"]
     I{"Tool calls returned?"}
-    J["execute_skill(name,args,context)"]
-    K["line_build skill bundle\nhealth/extract/extract_by_path"]
+    J["ToolRegistry.execute\nschema validation + dispatch"]
+    K1["builtin read-only tools\ngrep/glob/list_dir/read_file"]
+    K3["spawn_subagent\nfocused internal agent"]
+    S1["Subagent AgentRuntime\nsubagent_system.md + no spawn tool"]
+    K2["line_build skill\nhealth/extract/extract_by_path"]
     L["line_build service\n/api/v1/..."]
     M["append tool outputs\nand continue next round"]
     N["final assistant text"]
@@ -106,7 +109,11 @@ flowchart TD
     H --> I
     H --> Q --> N
     I -- "No" --> N
-    I -- "Yes" --> J --> K --> L --> J --> M --> H
+    I -- "Yes" --> J
+    J --> K1 --> J
+    J --> K3 --> S1 --> J
+    J --> K2 --> L --> J
+    J --> M --> H
     N --> O
     N --> P --> DB
     H -. "LLMClientError" .-> R --> DB
@@ -118,7 +125,9 @@ flowchart TD
 |---|---|---|
 | `AI4MW_web` | Django 主配置与主路由 | 承接 `/api/*`、`/accounts/*`、根路径跳转 |
 | `llm_agent` | 会话/消息模型、SSE 聊天、Agent 运行时、附件管理 | 聊天主业务核心 |
-| `llm_agent/skills/line_build` | Tool 形式封装曲线提取能力 | 当前唯一注册 skill bundle |
+| `llm_agent/services/context_builder.py` | 上下文编排 | 从 `llm_agent/prompts/agent/*.md` 组装系统提示、运行时上下文、subagent prompt |
+| `llm_agent/tools` | 统一工具注册、参数校验、只读工作区工具、subagent 分发、skill adapter | 内置 `grep` / `glob` / `list_dir` / `read_file` / `spawn_subagent` |
+| `llm_agent/skills/line_build` | Skill 形式封装曲线提取能力 | 通过 `llm_agent/tools` adapter 接入 agent |
 | `line_build` | Django 到独立算法服务的代理层 | 前端工作台用它访问提取服务 |
 | `frontend` | Next.js UI 与 API 调用层 | 已落地聊天、搜索、曲线提取页面 |
 | `storage/llm_agent_uploads` | 聊天图片附件存储目录 | 保存并回放消息附件 |

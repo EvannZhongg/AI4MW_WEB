@@ -47,8 +47,10 @@ AI4MW Web 是一个面向电磁与器件研究场景的 Web 项目，当前采�
   - 超时控制
   - 指数退避重试
   - tool/function calling
-- 聊天 agent skill 机制
-  - 当前仓库内已注册的 skill bundle 只有 `line_build`
+- 聊天 agent tool / skill 机制
+  - 内置只读工作区工具：`grep`、`glob`、`list_dir`、`read_file`
+  - 内置 subagent 分发工具：`spawn_subagent`
+  - 当前仓库内已注册的 skill bundle：`line_build`
 - 会话标题生成
   - 通过单独的 `SUMMARY_LLM_CONFIG` 调用摘要模型生成标题
 - 前端已落地页面
@@ -128,7 +130,7 @@ AI4MW_web/
   - 仅保留图片附件
   - 存盘后供聊天模型和附件回放接口复用
 - 消息组装
-  - 系统提示词来自 `llm_agent/prompts/`
+  - 系统提示词由 `llm_agent/services/context_builder.py` 从 `llm_agent/prompts/agent/*.md` 分段编排
   - 当前轮图片会转成 base64 data URL 送入多模态请求
 - LLM 运行时
   - 支持 `chat_completions`
@@ -136,6 +138,13 @@ AI4MW_web/
   - 支持 `auto` 自动切换
   - 支持 tool calling 与多轮 tool 回填
 - 当前 tool/skill 生态
+  - 已注册只读工具：
+    - `grep`
+    - `glob`
+    - `list_dir`
+    - `read_file`
+  - 已注册分发工具：
+    - `spawn_subagent`
   - 已注册 skill：`line_build`
   - 已注册工具：
     - `line_chart_service_health`

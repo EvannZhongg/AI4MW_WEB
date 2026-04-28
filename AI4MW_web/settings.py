@@ -307,6 +307,16 @@ LINE_BUILD_CONFIG = {
     "TIMEOUT_SEC": _get_env_int("LINE_BUILD_TIMEOUT_SEC", 120),
 }
 
+LLM_AGENT_TOOL_WORKSPACE = os.getenv("LLM_AGENT_TOOL_WORKSPACE", str(BASE_DIR))
+LLM_AGENT_ENABLED_BUILTIN_TOOLS = _get_env_list(
+    "LLM_AGENT_ENABLED_BUILTIN_TOOLS",
+    ["glob", "grep", "list_dir", "read_file"],
+)
+LLM_AGENT_ENABLE_SUBAGENTS = _get_env_bool("LLM_AGENT_ENABLE_SUBAGENTS", True)
+LLM_AGENT_MAX_TOOL_ROUNDS = _get_env_int("LLM_AGENT_MAX_TOOL_ROUNDS", 4)
+LLM_AGENT_MAX_SUBAGENT_TOOL_ROUNDS = _get_env_int("LLM_AGENT_MAX_SUBAGENT_TOOL_ROUNDS", 4)
+LLM_AGENT_MAX_TOOL_RESULT_CHARS = _get_env_int("LLM_AGENT_MAX_TOOL_RESULT_CHARS", 120000)
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

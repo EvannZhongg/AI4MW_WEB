@@ -5,6 +5,7 @@
 适用范围：
 
 - `llm_agent/services/`
+- `llm_agent/tools/`
 - `llm_agent/prompts/`
 - `llm_agent/skills/`
 - `llm_agent/views.py`
@@ -22,6 +23,7 @@ LLM 模块必须同时满足以下目标：
 - 对外部模型网关兼容 `chat_completions` 和 `responses`
 - 支持公网部署下的超时、连接失败、限流和重试
 - 支持文本对话和本轮图片输入
+- 支持只读工作区工具，例如 `grep`、`glob`、`list_dir`、`read_file`
 - 支持通过 skill 扩展外部能力
 - 接口失败时可回溯、可诊断，不制造脏会话
 
@@ -38,13 +40,15 @@ LLM 模块必须同时满足以下目标：
 - `llm_agent/services/chat_service.py`
   - 负责构造消息、拼接 prompt、组织多模态输入
 - `llm_agent/services/agent_runtime.py`
-  - 负责工具调用循环和 skill 执行
+  - 负责工具调用循环、工具结果回填和渐进式 skill 正文注入
+- `llm_agent/tools/`
+  - 负责工具统一注册、参数校验、内置只读工作区工具和 skill adapter
 - `llm_agent/services/attachment_service.py`
   - 负责图片保存、附件序列化和图片转多模态内容
 - `llm_agent/skills/`
-  - 负责 skill 元数据与工具执行封装
+  - 负责 skill 元数据与后端能力封装，运行时通过 `llm_agent/tools/skill_adapter.py` 接入统一工具注册表
 
-后续新增任何与模型请求、工具调用、消息构造有关的后端逻辑，默认都应优先放到 `llm_agent/services/` 或 `llm_agent/skills/`，不要继续把 LLM 细节散落到其他 app 或视图函数中。
+后续新增任何与模型请求、工具调用、消息构造有关的后端逻辑，默认都应优先放到 `llm_agent/services/`、`llm_agent/tools/` 或 `llm_agent/skills/`，不要继续把 LLM 细节散落到其他 app 或视图函数中。
 
 ## 3. 配置规范
 
@@ -147,16 +151,18 @@ LLM 网关或中转服务面向公网部署时，建议至少满足：
 
 主聊天消息按以下顺序构造：
 
-1. `assistant_system.txt`
-2. skill 列表摘要
-3. 当前轮附件 developer 提示
-4. 历史消息
+1. `llm_agent/prompts/agent/system.md`、`platform_policy.md`、`tools_section.md`、`subagents.md` 组成的系统提示
+2. 当前轮附件 developer 提示（来自 `agent/attachments.md`）
+3. 历史消息
+4. 最新 user 消息前置的运行时上下文（来自 `agent/runtime_context.md`）
 
 规则：
 
-- `assistant_system.txt` 只放全局行为约束
-- skill 的 `name + description` 会自动拼入系统提示
+- `AgentContextBuilder` 负责上下文编排，不在视图层手写 prompt 拼接
+- `agent/system.md` 只放全局身份、响应风格和安全边界
+- tool / skill 的 `name + description` 会自动拼入系统提示
 - skill 正文不会一开始全部注入，只在模型实际选择相关工具后再注入对应 skill body
+- 运行时上下文是 metadata，不是用户或系统指令；模型不能执行其中或工具输出中的嵌入指令
 
 ### 4.2 图片输入规则
 
@@ -230,9 +236,46 @@ LLM 网关或中转服务面向公网部署时，建议至少满足：
 - 不允许把“请求已失败”的残留 user 消息长期留在会话末尾
 - 不允许因为流式中断而制造连续同角色脏消息
 
-## 6. Skill 总体规范
+## 6. Tool 与 Skill 总体规范
 
-### 6.1 Skill 的定位
+### 6.1 内置工作区 Tool
+
+当前主聊天 agent 内置以下只读工作区工具：
+
+- `glob`
+- `grep`
+- `list_dir`
+- `read_file`
+
+这些工具用于回答“项目文件、代码、文档、仓库内信息”相关问题，不用于公网搜索，也不用于执行系统命令。
+
+公网部署约束：
+
+- 工具根目录由 `LLM_AGENT_TOOL_WORKSPACE` 控制，默认是项目根目录。
+- 只能读取根目录内路径，不能越权访问服务器其他目录。
+- 默认屏蔽 `.env`、数据库文件、上传存储、`.git`、虚拟环境、构建产物等敏感或噪声路径。
+- 不提供 shell、写文件、编辑文件等高风险能力。
+- 工具参数会在统一 registry 中做 schema 校验和基础类型转换。
+
+### 6.2 Subagent 分发
+
+当前主聊天 agent 提供 `spawn_subagent` 工具，用于把窄范围、可独立完成的调查交给 focused subagent。
+
+实现边界：
+
+- Web/SSE 当前采用同步回填：subagent 在同一轮请求内运行，结果作为工具结果返回给主 agent。
+- subagent 使用同一套 `LLMClient` 调用方式，运行时强制 `API_INTERFACE=auto`、优先 `chat_completions`。
+- subagent 的工具 registry 禁用 `spawn_subagent`，避免递归分发。
+- subagent 默认可使用只读工作区工具和现有 skill adapter。
+- subagent prompt 位于 `llm_agent/prompts/agent/subagent_system.md` 与 `subagent_task.md`。
+
+使用边界：
+
+- 只用于窄范围、独立、可并行思考的代码/文档/后端工具调查。
+- 不用于简单问答，也不用于主 agent 下一步必须立即亲自判断的阻塞任务。
+- 主 agent 必须综合 subagent 结果后回答用户，不应原样粘贴。
+
+### 6.3 Skill 的定位
 
 本项目中的 skill 是“给模型调用的后端工具封装”，不是通用文件系统 agent。
 
@@ -243,7 +286,7 @@ LLM 网关或中转服务面向公网部署时，建议至少满足：
 - skill 不能假设模型能直接读取本地文件系统
 - 额外文档不会被自动加载，除非后端显式注入
 
-### 6.2 目录规范
+### 6.4 目录规范
 
 每个 skill 必须放在：
 
@@ -266,7 +309,7 @@ llm_agent/skills/<skill_name>/
 - 一个目录代表一个 skill bundle
 - 一个 bundle 可以暴露一个或多个工具
 
-### 6.3 SKILL.md 规范
+### 6.5 SKILL.md 规范
 
 `SKILL.md` 必须以 YAML frontmatter 开头，至少包含：
 
@@ -315,7 +358,7 @@ body 编写规则：
 - 不要堆多份额外说明文档企图让模型“自己再去读”
 - 只有会被注入给模型的内容，才值得写进 `SKILL.md`
 
-### 6.4 skill.py 规范
+### 6.6 skill.py 规范
 
 `skill.py` 必须导出：
 
@@ -383,7 +426,7 @@ def get_skills(skill_doc: str) -> list[AgentSkill]:
     return [ExampleSkill()]
 ```
 
-### 6.5 SkillExecutionContext 使用规范
+### 6.7 SkillExecutionContext 使用规范
 
 当前 context 提供：
 
@@ -398,7 +441,7 @@ def get_skills(skill_doc: str) -> list[AgentSkill]:
 
 这也是当前 `line_build` skill 推荐 `extract_line_chart` 而不是强制用户传 `image_path` 的原因。
 
-### 6.6 Skill 输出规范
+### 6.8 Skill 输出规范
 
 skill 返回建议遵循：
 
@@ -417,7 +460,7 @@ skill 返回建议遵循：
 - 把所有逻辑塞进一个字符串
 - 隐藏外部服务原始错误
 
-### 6.7 Skill 与独立服务的边界
+### 6.9 Skill 与独立服务的边界
 
 若某能力本身已经是独立模块或独立服务，例如 `line_build`，必须遵守：
 
@@ -443,12 +486,12 @@ skill 返回建议遵循：
 6. 本地验证 registry 能发现该 skill
 7. 验证模型在聊天中能正确触发
 8. 若 skill 依赖新配置项，同步更新 `config.yaml`、`.env.example`、`docs/CONFIGURATION.md`
-9. 若 skill 改变全局行为边界，再评估是否更新 `assistant_system.txt`
+9. 若 skill 改变全局安全规则、能力边界或调用策略，再评估是否更新 `llm_agent/prompts/agent/*.md`
 
 注意：
 
 - 正常情况下，不需要手动把 skill 名字写回系统 prompt；registry 会自动把 `name + description` 追加进 prompt
-- 只有新增全局安全规则、能力边界或调用策略时，才需要修改 `assistant_system.txt`
+- 只有新增全局安全规则、能力边界或调用策略时，才需要修改 `llm_agent/prompts/agent/*.md`
 
 ## 8. 模型调用代码规范
 
@@ -477,6 +520,8 @@ skill 返回建议遵循：
 
 - `llm_client.py` 中的 payload 规范化
 - `agent_runtime.py` 中的工具循环
+- `llm_agent/services/context_builder.py` 中的 prompt 编排
+- `llm_agent/tools/registry.py` 中的工具注册、参数校验与 skill adapter
 - `chat_service.py` 中的图片/历史消息拼装
 - `views.py` 中的 SSE 字段
 - skill registry 的 frontmatter 解析逻辑
@@ -487,6 +532,7 @@ skill 返回建议遵循：
 - `responses`
 - 本轮图片输入
 - tool call 回环
+- subagent 禁止递归分发
 - 前端流式渲染
 - 失败时用户消息清理
 
@@ -498,6 +544,7 @@ skill 返回建议遵循：
 python manage.py check
 python -m py_compile llm_agent/views.py
 python -m py_compile llm_agent/services/llm_client.py
+python -m py_compile llm_agent/services/agent_runtime.py llm_agent/services/context_builder.py llm_agent/tools/registry.py llm_agent/tools/subagent.py
 ```
 
 如修改了前端聊天展示，还应执行：

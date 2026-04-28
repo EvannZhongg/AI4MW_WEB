@@ -7,11 +7,11 @@ from django.urls import reverse
 
 from .agent_runtime import AgentRunResult, AgentRuntime
 from .attachment_service import build_image_content_items, parse_attachments
+from .context_builder import AgentContextBuilder
 from .llm_client import LLMClient, LLMClientError
 from .prompt_loader import load_prompt_text
 from ..models import Conversation
 from ..skills.base import SkillExecutionContext
-from ..skills.registry import build_skill_guidance
 
 
 def generate_title(message_text: str) -> str | None:
@@ -39,27 +39,22 @@ def build_chat_messages(
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
     current_turn_attachments = current_turn_attachments or []
+    context_builder = AgentContextBuilder()
 
-    system_prompt = load_prompt_text("assistant_system.txt")
-    skill_guidance = build_skill_guidance()
-    system_sections = [section for section in [system_prompt, skill_guidance] if section]
-    if system_sections:
-        messages.append({"role": "system", "content": "\n\n".join(system_sections)})
+    system_prompt = context_builder.build_system_prompt()
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
     if current_turn_attachments:
         attachment_names = ", ".join(
             attachment.get("name", "unnamed-image") for attachment in current_turn_attachments
         )
+        attachment_guidance = context_builder.build_attachment_guidance(
+            [attachment.get("name", "unnamed-image") for attachment in current_turn_attachments]
+        )
         messages.append(
             {
                 "role": "developer",
-                "content": (
-                    "Current user turn includes uploaded images. "
-                    f"Available attachment names: {attachment_names}. "
-                    "If line_build extraction is needed, prefer the extract_line_chart tool. "
-                    "You may omit image_path; the backend will resolve the current-turn image automatically. "
-                    "For multimodal gateway compatibility, prior assistant messages may be omitted; "
-                    "focus on the user's text history and the current uploaded images."
-                ),
+                "content": attachment_guidance or f"Current user turn attachments: {attachment_names}.",
             }
         )
 
@@ -76,10 +71,20 @@ def build_chat_messages(
             and message.role == "user"
             and message.id == latest_message_id
         )
+        runtime_context = ""
+        if message.role == "user" and message.id == latest_message_id:
+            runtime_context = context_builder.build_runtime_context(
+                conversation_id=conversation.id,
+                attachment_names=[
+                    attachment.get("name", "unnamed-image")
+                    for attachment in current_turn_attachments
+                ],
+            )
         content_items = _build_message_content_items(
             message.content,
             parse_attachments(message.attachments_json),
             include_images=include_images,
+            runtime_context=runtime_context,
         )
         if not content_items:
             continue
@@ -100,6 +105,8 @@ def run_chat_agent(
     runtime_config = _build_chat_runtime_config(settings.LLM_CONFIG)
     runtime = AgentRuntime(
         runtime_config,
+        max_tool_rounds=getattr(settings, "LLM_AGENT_MAX_TOOL_ROUNDS", 4),
+        max_tool_result_chars=getattr(settings, "LLM_AGENT_MAX_TOOL_RESULT_CHARS", 120_000),
         skill_context=SkillExecutionContext(
             conversation_id=conversation.id,
             current_turn_attachments=current_turn_attachments or [],
@@ -141,8 +148,11 @@ def _build_message_content_items(
     attachments: list[dict[str, str]],
     *,
     include_images: bool,
+    runtime_context: str = "",
 ) -> list[dict[str, Any]]:
     content_items: list[dict[str, Any]] = []
+    if runtime_context.strip():
+        content_items.append({"type": "input_text", "text": runtime_context.strip()})
     if message_text.strip():
         content_items.append({"type": "input_text", "text": message_text.strip()})
 

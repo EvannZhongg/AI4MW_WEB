@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,11 @@ import requests
 from django.conf import settings
 
 from ..base import AgentSkill, SkillDefinition, SkillExecutionContext, SkillExecutionError
+
+
+_DATA_PREVIEW_ROWS = 20
+_SUPPORTED_IMAGE_MIME_PREFIX = "image/"
+_SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 
 
 class _LineBuildHTTPMixin:
@@ -51,7 +57,7 @@ class _LineBuildHTTPMixin:
             raise SkillExecutionError("line_build_http_error", detail=detail)
 
         if not isinstance(payload, dict):
-            raise SkillExecutionError("invalid_line_build_response", detail=response.text)
+            raise SkillExecutionError("invalid_line_build_response", detail=_clean_detail(response.text))
         return payload
 
 
@@ -75,7 +81,14 @@ class LineBuildHealthSkill(_LineBuildHTTPMixin, AgentSkill):
         context: SkillExecutionContext | None = None,
     ) -> dict[str, Any]:
         _ = arguments, context
-        return self._request("GET", "/api/v1/health")
+        payload = self._request("GET", "/api/v1/health")
+        return {
+            "reachable": True,
+            "service": payload.get("service"),
+            "status": payload.get("status"),
+            "port": payload.get("port"),
+            "raw": payload,
+        }
 
 
 class LineBuildExtractSkill(_LineBuildHTTPMixin, AgentSkill):
@@ -113,13 +126,20 @@ class LineBuildExtractSkill(_LineBuildHTTPMixin, AgentSkill):
         arguments: dict[str, Any],
         context: SkillExecutionContext | None = None,
     ) -> dict[str, Any]:
-        image_path = str(arguments.get("image_path") or "").strip()
-        include_data_rows = arguments.get("include_data_rows")
+        image_path = _normalize_image_path(arguments.get("image_path"))
+        include_data_rows = _normalize_include_data_rows(arguments)
         if image_path:
             payload = {"image_path": image_path}
-            if isinstance(include_data_rows, bool):
-                payload["include_data_rows"] = include_data_rows
-            return self._request("POST", "/api/v1/line-charts/extract-by-path", json_body=payload)
+            payload["include_data_rows"] = include_data_rows
+            result = self._request("POST", "/api/v1/line-charts/extract-by-path", json_body=payload)
+            return _normalize_extraction_result(
+                result,
+                source={
+                    "kind": "image_path",
+                    "image_path": image_path,
+                },
+                include_data_rows=include_data_rows,
+            )
 
         attachment = _resolve_attachment(arguments, context)
         attachment_path = Path(str(attachment.get("path") or "").strip())
@@ -128,20 +148,29 @@ class LineBuildExtractSkill(_LineBuildHTTPMixin, AgentSkill):
                 "attachment_file_missing",
                 detail=f"Current-turn attachment file is unavailable: {attachment_path}",
             )
+        _validate_attachment_is_image(attachment, attachment_path)
 
         form_data: dict[str, str] = {}
-        if isinstance(include_data_rows, bool):
-            form_data["include_data_rows"] = "true" if include_data_rows else "false"
+        form_data["include_data_rows"] = "true" if include_data_rows else "false"
 
         file_name = str(attachment.get("name") or attachment_path.name).strip() or attachment_path.name
         content_type = str(attachment.get("content_type") or "application/octet-stream").strip()
         with attachment_path.open("rb") as file_handle:
-            return self._request(
+            result = self._request(
                 "POST",
                 "/api/v1/line-charts/extract",
                 data=form_data or None,
                 files={"file": (file_name, file_handle, content_type)},
             )
+        return _normalize_extraction_result(
+            result,
+            source={
+                "kind": "current_turn_attachment",
+                "attachment_name": file_name,
+                "content_type": content_type,
+            },
+            include_data_rows=include_data_rows,
+        )
 
 
 class LineBuildExtractByPathSkill(_LineBuildHTTPMixin, AgentSkill):
@@ -174,15 +203,21 @@ class LineBuildExtractByPathSkill(_LineBuildHTTPMixin, AgentSkill):
         arguments: dict[str, Any],
         context: SkillExecutionContext | None = None,
     ) -> dict[str, Any]:
-        image_path = str(arguments.get("image_path") or "").strip()
+        image_path = _normalize_image_path(arguments.get("image_path"))
         if not image_path:
             raise SkillExecutionError("missing_image_path", detail="image_path is required")
 
-        include_data_rows = arguments.get("include_data_rows")
-        payload = {"image_path": image_path}
-        if isinstance(include_data_rows, bool):
-            payload["include_data_rows"] = include_data_rows
-        return self._request("POST", "/api/v1/line-charts/extract-by-path", json_body=payload)
+        include_data_rows = _normalize_include_data_rows(arguments)
+        payload = {"image_path": image_path, "include_data_rows": include_data_rows}
+        result = self._request("POST", "/api/v1/line-charts/extract-by-path", json_body=payload)
+        return _normalize_extraction_result(
+            result,
+            source={
+                "kind": "image_path",
+                "image_path": image_path,
+            },
+            include_data_rows=include_data_rows,
+        )
 
 
 def get_skills(skill_doc: str) -> list[AgentSkill]:
@@ -218,10 +253,103 @@ def _resolve_attachment(
     return attachments[0]
 
 
+def _normalize_include_data_rows(arguments: dict[str, Any]) -> bool:
+    value = arguments.get("include_data_rows")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _normalize_image_path(value: Any) -> str:
+    image_path = str(value or "").strip()
+    if not image_path:
+        return ""
+    lowered = image_path.lower()
+    if lowered.startswith(("blob:", "data:", "http://", "https://")):
+        raise SkillExecutionError(
+            "invalid_image_path",
+            detail=(
+                "image_path must be a server-accessible filesystem path. "
+                "Browser blob/data URLs and remote URLs are not valid for extract-by-path."
+            ),
+        )
+    return image_path
+
+
+def _validate_attachment_is_image(attachment: dict[str, str], path: Path) -> None:
+    content_type = str(attachment.get("content_type") or "").strip().lower()
+    if content_type.startswith(_SUPPORTED_IMAGE_MIME_PREFIX):
+        return
+    guessed_type = (mimetypes.guess_type(str(path))[0] or "").lower()
+    if guessed_type.startswith(_SUPPORTED_IMAGE_MIME_PREFIX):
+        return
+    if path.suffix.lower() in _SUPPORTED_IMAGE_SUFFIXES:
+        return
+    raise SkillExecutionError(
+        "attachment_not_image",
+        detail=f"Current-turn attachment is not a supported image file: {attachment.get('name') or path.name}",
+    )
+
+
+def _normalize_extraction_result(
+    payload: dict[str, Any],
+    *,
+    source: dict[str, Any],
+    include_data_rows: bool,
+) -> dict[str, Any]:
+    data_rows = payload.get("data") if isinstance(payload.get("data"), list) else []
+    data_row_count = len(data_rows)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    if not data_row_count:
+        data_row_count = _safe_int(summary.get("point_count"), 0)
+
+    result: dict[str, Any] = {
+        "request_id": payload.get("request_id"),
+        "source": source,
+        "summary": summary,
+        "axis": payload.get("axis") if isinstance(payload.get("axis"), dict) else {},
+        "artifacts": payload.get("artifacts") if isinstance(payload.get("artifacts"), dict) else {},
+        "data_rows_requested": include_data_rows,
+        "data_row_count": data_row_count,
+        "data_rows_included": bool(include_data_rows and data_rows),
+    }
+
+    if include_data_rows and data_rows:
+        result["data"] = data_rows
+    elif data_rows:
+        result["data_preview"] = data_rows[:_DATA_PREVIEW_ROWS]
+        result["data_rows_omitted"] = max(0, len(data_rows) - _DATA_PREVIEW_ROWS)
+
+    extra_keys = sorted(
+        key
+        for key in payload
+        if key not in {"request_id", "summary", "axis", "artifacts", "data"}
+    )
+    if extra_keys:
+        result["extra_response_fields"] = extra_keys
+    return result
+
+
+def _safe_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _extract_error_detail(payload: Any, *, fallback: str) -> str:
     if isinstance(payload, dict):
         detail = payload.get("detail")
         if isinstance(detail, str) and detail.strip():
-            return detail.strip()
-        return json.dumps(payload, ensure_ascii=False)
-    return fallback.strip()
+            return _clean_detail(detail)
+        return _clean_detail(json.dumps(payload, ensure_ascii=False))
+    return _clean_detail(fallback)
+
+
+def _clean_detail(text: str, *, limit: int = 1200) -> str:
+    compact = " ".join((text or "").split())
+    if len(compact) <= limit:
+        return compact
+    return f"{compact[: limit - 3]}..."

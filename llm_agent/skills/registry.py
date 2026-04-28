@@ -71,23 +71,46 @@ def get_tool_definitions() -> list[dict[str, Any]]:
 def build_skill_guidance() -> str:
     chunks: list[str] = []
     for bundle in get_skill_bundles():
-        chunks.append(f"- {bundle.name}: {bundle.description}")
+        tool_names = ", ".join(skill.definition.name for skill in bundle.skills)
+        suffix = f" Tools: {tool_names}" if tool_names else ""
+        chunks.append(f"- {bundle.name}: {bundle.description}{suffix}")
     return "\n\n".join(chunks).strip()
 
 
-def build_skill_context_for_tools(tool_names: list[str]) -> str:
+def build_skill_context_for_tools(
+    tool_names: list[str],
+    *,
+    loaded_bundle_names: set[str] | None = None,
+) -> str:
+    context, _ = select_skill_context_for_tools(
+        tool_names,
+        loaded_bundle_names=loaded_bundle_names,
+    )
+    return context
+
+
+def select_skill_context_for_tools(
+    tool_names: list[str],
+    *,
+    loaded_bundle_names: set[str] | None = None,
+) -> tuple[str, set[str]]:
     selected_tools = {name for name in tool_names if name}
     if not selected_tools:
-        return ""
+        return "", set()
+    loaded_bundle_names = loaded_bundle_names or set()
 
     chunks: list[str] = []
+    loaded_now: set[str] = set()
     for bundle in get_skill_bundles():
+        if bundle.name in loaded_bundle_names:
+            continue
         bundle_tool_names = {skill.definition.name for skill in bundle.skills}
         if not (bundle_tool_names & selected_tools):
             continue
         if bundle.body.strip():
             chunks.append(f"[Skill: {bundle.name}]\n{bundle.body.strip()}")
-    return "\n\n".join(chunks).strip()
+        loaded_now.add(bundle.name)
+    return "\n\n".join(chunks).strip(), loaded_now
 
 
 def execute_skill(

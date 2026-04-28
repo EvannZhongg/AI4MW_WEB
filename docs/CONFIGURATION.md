@@ -77,6 +77,13 @@ LLM_MAX_RETRY_DELAY_SEC=8
 LLM_POOL_MAXSIZE=10
 LLM_EXTRA_HEADERS_JSON={}
 
+LLM_AGENT_TOOL_WORKSPACE=.
+LLM_AGENT_ENABLED_BUILTIN_TOOLS=glob,grep,list_dir,read_file
+LLM_AGENT_ENABLE_SUBAGENTS=true
+LLM_AGENT_MAX_TOOL_ROUNDS=4
+LLM_AGENT_MAX_SUBAGENT_TOOL_ROUNDS=4
+LLM_AGENT_MAX_TOOL_RESULT_CHARS=120000
+
 SUMMARY_LLM_MODEL=deepseek-chat
 SUMMARY_LLM_API_BASE=https://api.deepseek.com/v1
 SUMMARY_LLM_API_KEY=${SUMMARY_LLM_API_KEY}
@@ -112,6 +119,20 @@ VLM_API_KEY=${AI4MW_VLM_API_KEY}
   - Django 侧会对超时、连接失败、`408/409/425/429/5xx` 做指数退避重试，并优先尊重 `Retry-After`。
 - `SUMMARY_LLM_*`
   - 摘要标题模型默认继承主聊天模型的网络重试配置，只需单独覆盖模型、接口类型、地址或密钥即可。
+- `LLM_AGENT_TOOL_WORKSPACE`
+  - 聊天 agent 的只读工作区工具根目录，支持相对项目根目录路径。
+- `LLM_AGENT_ENABLED_BUILTIN_TOOLS`
+  - 启用内置只读工具，默认 `glob,grep,list_dir,read_file`。
+  - 公网部署下不提供 shell/write/edit 类工具；内置工具会屏蔽 `.env`、数据库、上传存储、`.git` 等敏感路径。
+- `LLM_AGENT_ENABLE_SUBAGENTS`
+  - 是否启用 `spawn_subagent` 分发工具。
+  - 当前 Web 架构中 subagent 会在同一轮请求内同步执行并把结果回填给主 agent。
+- `LLM_AGENT_MAX_TOOL_ROUNDS`
+  - 单轮最多允许的模型工具回环次数。
+- `LLM_AGENT_MAX_SUBAGENT_TOOL_ROUNDS`
+  - 单个 subagent 最多允许的工具回环次数。
+- `LLM_AGENT_MAX_TOOL_RESULT_CHARS`
+  - 单次工具结果回填给模型前的最大字符数。
 
 ## 6. 向量库（pgvector）
 ```
