@@ -77,4 +77,5 @@ VLM_API_BASE: https://dashscope.aliyuncs.com/compatible-mode/v1
 NEXT_PUBLIC_API_BASE: http://localhost:8000
 NEXT_PUBLIC_PLUGIN_REGISTRY: local
 GITHUB_CLIENT_ID: Ov23li5EueS9KtZ7zICD
-FRONTEND_URL: http://localhost:3000
+FRONTEND_HOST: localhost
+FRONTEND_PORT: auto

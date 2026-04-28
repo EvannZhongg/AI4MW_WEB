@@ -203,9 +203,15 @@ UI_CARD_LAYOUT=true
 NEXT_PUBLIC_API_BASE=http://localhost:8000
 NEXT_PUBLIC_PLUGIN_REGISTRY=local
 GITHUB_CLIENT_ID=Ov23li5EueS9KtZ7zICD
+FRONTEND_HOST=localhost
+FRONTEND_PORT=auto|3000|3001
+FRONTEND_URL=https://your-domain.example
 ```
 说明：
 - `NEXT_PUBLIC_API_BASE` 用于前端请求后端 API 的统一入口（可在公网/本地环境切换）。
+- `FRONTEND_PORT=auto` 时，前端开发服务器保持 Next.js 自动选端口行为；写成数字时，`npm run dev` / `npm run start` 会固定使用该端口。
+- `FRONTEND_URL` 是完整前端地址覆盖项。设置后优先于 `FRONTEND_HOST` / `FRONTEND_PORT`，推荐用于公网部署。
+- GitHub 登录从前端发起时会记录当前 `window.location.href`，登录完成后优先返回该地址，因此本地自动切到 3001 时也不会被送回 3000。
 - 若需要覆盖根目录 `.env`，可在 `frontend/.env.local` 设置同名变量。
 
 ## 15. GitHub OAuth

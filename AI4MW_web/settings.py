@@ -93,6 +93,18 @@ def _get_env_json_dict(key: str, default: dict | None = None) -> dict:
     return {str(k): str(v) for k, v in parsed.items() if str(k).strip() and str(v).strip()}
 
 
+def _build_frontend_url() -> str:
+    explicit_url = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+    if explicit_url:
+        return explicit_url
+    scheme = os.getenv("FRONTEND_SCHEME", "http").strip() or "http"
+    host = os.getenv("FRONTEND_HOST", "localhost").strip() or "localhost"
+    port = _get_env_int("FRONTEND_PORT", 3000)
+    default_port = 443 if scheme == "https" else 80
+    port_part = "" if port == default_port else f":{port}"
+    return f"{scheme}://{host}{port_part}"
+
+
 _config_values = _load_yaml_file(BASE_DIR / "config.yaml")
 _load_env_file(BASE_DIR / ".env")
 for _key, _value in _config_values.items():
@@ -306,6 +318,8 @@ LINE_BUILD_CONFIG = {
     "BASE_URL": os.getenv("LINE_BUILD_BASE_URL", "http://localhost:8004"),
     "TIMEOUT_SEC": _get_env_int("LINE_BUILD_TIMEOUT_SEC", 120),
 }
+
+FRONTEND_URL = _build_frontend_url()
 
 LLM_AGENT_TOOL_WORKSPACE = os.getenv("LLM_AGENT_TOOL_WORKSPACE", str(BASE_DIR))
 LLM_AGENT_ENABLED_BUILTIN_TOOLS = _get_env_list(

@@ -45,6 +45,7 @@ urlpatterns = [
     ),
     path("api/session", views.session_info, name="session_info"),
     path("api/logout", views.api_logout, name="api_logout"),
+    path("auth/github/login/", views.begin_github_login, name="begin_github_login"),
     path("api/line-charts/", include("line_build.urls")),
     path("api/paper-search/", include("paper_saerch.urls")),
     path("accounts/", include("allauth.urls")),

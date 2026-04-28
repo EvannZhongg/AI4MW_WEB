@@ -222,8 +222,9 @@ export function AppSidebar({
   }, [renamingId]);
 
   const goToLogin = () => {
-    const url = `${runtimeConfig.apiBase.replace(/\/$/, "")}/accounts/github/login/`;
-    window.location.assign(url);
+    const url = new URL(`${runtimeConfig.apiBase.replace(/\/$/, "")}/auth/github/login/`);
+    url.searchParams.set("frontend_url", window.location.href);
+    window.location.assign(url.toString());
   };
 
   const openConversation = (conversationId: number) => {

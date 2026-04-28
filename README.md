@@ -105,7 +105,7 @@ AI4MW_web/
 
 ### 3.1 Django 后端
 
-- 根路径 `/` 当前重定向到 `FRONTEND_URL`
+- 根路径 `/` 当前重定向到登录时记录的前端地址，未记录时回落到前端配置地址
 - `/api/session` 返回当前登录态
 - `/api/logout` 处理退出登录
 - `/api/chat` 提供基于 SSE 的流式聊天
@@ -370,10 +370,12 @@ npm run dev
 - 前端：`http://localhost:3000`
 - 后端：`http://localhost:8000`
 
-确保以下配置相互匹配：
+前端端口配置：
 
-- `FRONTEND_URL=http://localhost:3000`
 - `NEXT_PUBLIC_API_BASE=http://localhost:8000`
+- `FRONTEND_PORT=auto` 时，`npm run dev` 保持 Next.js 默认行为，3000 被占用时可自动切到 3001。
+- 若要手动固定端口，在根目录 `config.yaml` 设置 `FRONTEND_PORT: 3001`，再重启前后端。
+- 公网或反向代理部署可直接设置完整的 `FRONTEND_URL=https://your-domain.example`，它会覆盖 `FRONTEND_HOST` / `FRONTEND_PORT`。
 
 ### 8.3 GitHub OAuth
 

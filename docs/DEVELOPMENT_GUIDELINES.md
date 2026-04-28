@@ -272,7 +272,7 @@
 2. 前端已完成正式构建验证
 3. Nginx / Caddy 反向代理规则已验证
 4. OAuth 回调地址已替换为公网 HTTPS 域名
-5. `NEXT_PUBLIC_API_BASE`、`FRONTEND_URL`、后端域名配置一致
+5. `NEXT_PUBLIC_API_BASE`、`FRONTEND_URL` 或 `FRONTEND_HOST` / `FRONTEND_PORT`、后端域名配置一致
 6. 数据库、日志、媒体目录有备份和清理方案
 7. 如启用异步任务，Redis / Celery / Worker / 监控已到位
 
