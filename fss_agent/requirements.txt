@@ -1,0 +1,11 @@
+# Core HTTP client used to call the OpenRouter chat-completions API.
+httpx==0.28.1
+
+# Image loading, resizing, and JPEG conversion before sending figures to the VLM.
+Pillow==12.2.0
+
+# PostgreSQL driver used by fss_agent/postgres_store.py.
+psycopg[binary]==3.3.3
+
+# NebulaGraph Python client used by fss_agent/nebula_store.py.
+nebula3-python==3.8.3
